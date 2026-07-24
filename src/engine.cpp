@@ -9,6 +9,8 @@
 #include "strings.hpp"
 #include "windowing/glfw.hpp"
 
+#include <chrono>
+
 using namespace kuiper;
 
 engine::engine_or_err engine::initialise(std::unique_ptr<kuiper::application> app, const config& config) {
@@ -81,14 +83,21 @@ error::maybe engine::run() {
         m_app->initialise(this, std::move(app_logger));
     }
 
+    std::chrono::time_point time_last = std::chrono::high_resolution_clock::now();
+
     while (!m_window->should_close() && !m_app->should_quit()) {
+        // Delta time
+        const std::chrono::time_point      time_now = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration<float> dt_dur   = time_now - time_last;
+        time_last                                   = time_now;
+
         event_bus.poll();
 
-        m_app->pre_render(this, 0.0f);
+        m_app->pre_render(this, dt_dur.count());
 
         m_renderer->render(m_scenes);
 
-        m_app->post_render(this, 0.0f);
+        m_app->post_render(this, dt_dur.count());
 
         m_window->swap_buffers();
         m_window->poll_events();
