@@ -20,7 +20,7 @@ class config {
 
   public:
     std::optional<window::backend> backend {};
-    verbosity                      verbosity {verbosity::normal};
+    kuiper::verbosity              verbosity {verbosity::normal};
 };
 
 } // namespace kuiper
