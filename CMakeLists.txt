@@ -84,13 +84,4 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# lunasvg
-
-FetchContent_Declare(
-        lunasvg
-        GIT_REPOSITORY https://github.com/sammycage/lunasvg.git
-        GIT_TAG v3.5.0
-)
-FetchContent_MakeAvailable(lunasvg)
-
-target_link_libraries(kuiper PUBLIC spdlog glfw glad glm stb lunasvg)
+target_link_libraries(kuiper PUBLIC spdlog glfw glad glm stb)
