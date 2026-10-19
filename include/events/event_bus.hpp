@@ -46,12 +46,10 @@ class event_bus {
         using DecayedType = std::decay_t<EventType>;
         auto type_idx     = std::type_index(typeid(DecayedType));
 
-        // Find the event type first
         if (auto it = listeners.find(type_idx); it != listeners.end()) {
-            // Erase the specific listener by ID
+
             it->second.erase(id);
 
-            // Clean up the outer map entry if no listeners remain to save memory
             if (it->second.empty()) {
                 listeners.erase(it);
             }
@@ -73,7 +71,6 @@ class event_bus {
             auto        type_idx = std::type_index(event.type());
 
             if (auto it = listeners.find(type_idx); it != listeners.end()) {
-                // Iterate through the inner map using structured binding
                 for (const auto& [id, handler] : it->second) {
                     handler(event);
                 }

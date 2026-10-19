@@ -17,7 +17,7 @@ enum class error_code {
     unknown
 };
 
-constexpr const char* error_code_to_string(error_code code) {
+constexpr std::string_view error_code_to_string(error_code code) {
     switch (code) {
     case error_code::no_error:
         return "No error";

@@ -183,7 +183,7 @@ void glfw_window::framebuffer_size_callback(GLFWwindow* window, int width, int h
     auto& logger = engine_logger::get();
     logger.trace("Window \"{}\" framebuffer resized: {} x {}", instance->title(), w, h);
 
-    event_bus::get().publish<framebuffer_resized_event>({w, h});
+    event_bus::get().publish<event::framebuffer_resized>({w, h});
 
     return;
 }

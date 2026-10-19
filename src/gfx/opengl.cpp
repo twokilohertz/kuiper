@@ -6,7 +6,6 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-#include <GL/glext.h>
 #include <optional>
 
 using namespace kuiper;

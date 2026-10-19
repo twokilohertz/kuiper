@@ -1,10 +1,12 @@
 #pragma once
 
+#include <string_view>
+
 namespace kuiper {
 
 namespace strings {
-    constexpr const char* engine_name    = "Kuiper Engine";
-    constexpr const char* missing_string = "[none]";
+    constexpr std::string_view engine_name    = "Kuiper Engine";
+    constexpr std::string_view missing_string = "[none]";
 } // namespace strings
 
 } // namespace kuiper

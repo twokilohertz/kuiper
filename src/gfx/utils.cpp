@@ -24,7 +24,7 @@ constexpr const char* opengl::error_to_string(GLenum error_code) {
         return "An attempt has been made to perform an operation that would cause an internal stack to overflow";
     }
 
-    return strings::missing_string;
+    return "";
 }
 
 std::optional<error> opengl::get_last_error() {

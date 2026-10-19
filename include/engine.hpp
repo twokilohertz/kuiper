@@ -38,6 +38,9 @@ class engine {
     kuiper::application::u_ptr m_app {nullptr};
     kuiper::window::s_ptr      m_window {nullptr};
 
+    // Entities, assets & resources
+    // TODO
+
     // Rendering
     kuiper::renderer::s_ptr m_renderer {nullptr};
     std::vector<scene>      m_scenes {};

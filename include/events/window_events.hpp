@@ -4,9 +4,13 @@
 
 namespace kuiper {
 
-struct framebuffer_resized_event {
-    std::uint32_t width;
-    std::uint32_t height;
-};
+namespace event {
+
+    struct framebuffer_resized {
+        std::uint32_t width;
+        std::uint32_t height;
+    };
+
+} // namespace event
 
 } // namespace kuiper

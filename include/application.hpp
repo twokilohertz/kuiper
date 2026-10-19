@@ -26,11 +26,11 @@ class application {
     using u_ptr = std::unique_ptr<application>;
 
   public:
-    virtual void initialise(kuiper::engine* engine, std::unique_ptr<kuiper::logger> logger) = 0;
-    virtual void shutdown(kuiper::engine* engine)                                           = 0;
+    virtual void initialise(kuiper::engine& engine, std::unique_ptr<kuiper::logger> logger) = 0;
+    virtual void shutdown(kuiper::engine& engine)                                           = 0;
     virtual bool should_quit()                                                              = 0;
-    virtual void pre_render(kuiper::engine* engine, float dt)                               = 0;
-    virtual void post_render(kuiper::engine* engine, float dt)                              = 0;
+    virtual void pre_render(kuiper::engine& engine, float dt)                               = 0;
+    virtual void post_render(kuiper::engine& engine, float dt)                              = 0;
 
     inline const application_spec& get_app_spec() {
         return m_app_spec;
