@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -247,6 +248,11 @@ namespace ecs {
         template<component T>
         const T& operator[](std::size_t idx) const {
             return data<T>()[idx];
+        }
+
+        template<component T>
+        std::span<T> as_span() {
+            return {data<T>(), data<T>() + size()};
         }
 
       private:

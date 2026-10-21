@@ -118,15 +118,25 @@ error::maybe engine::run() {
 
     auto e1 = w.create_entity();
     assert(w.is_alive(e1));
+    assert(e1.version() == 0);
     w.destroy_entity(e1);
     auto e2 = w.create_entity();
-    assert(e2.version() == 1);
+    assert(e2.version() == 1); // should be 1 because e1 was recycled
 
     const component::position cool_pos {.x = 1337.0f, .y = 67.0f, .z = 111.111f};
     const std::uint32_t       cool_num = 67;
     w.add_components(e2, cool_pos, cool_num);
-    assert(w.get<std::uint32_t>(e2) == cool_num);
-    assert(w.get<component::position>(e2).x == cool_pos.x);
+    const auto [x, y] = w.get_components<std::uint32_t, component::position>(e2);
+    assert(x == cool_num);
+    assert(y == cool_pos);
+
+    w.for_each<std::uint32_t, component::position>([](const std::uint32_t& x, const component::position& y) {
+        ENGINE_LOG_DEBUG("holy fuck: {} & {} !!", x, y.z);
+
+        return;
+    });
+
+    w.remove_components<std::uint32_t>(e2);
 
     const auto subscription_id =
         event_bus.subscribe<event::framebuffer_resized>([](const event::framebuffer_resized& e) {

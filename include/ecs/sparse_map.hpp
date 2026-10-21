@@ -147,12 +147,12 @@ namespace ecs {
         }
 
         [[nodiscard]]
-        reference operator[](key_type k) noexcept {
+        reference operator[](key_type k) {
             return m_values[sparse_set<K>::sparse()[k.id()]];
         }
 
         [[nodiscard]]
-        const_reference operator[](key_type k) const noexcept {
+        const_reference operator[](key_type k) const {
             return m_values[sparse_set<K>::sparse()[k.id()]];
         }
 

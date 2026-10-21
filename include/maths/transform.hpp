@@ -9,6 +9,8 @@ namespace component {
         float x {0.0f};
         float y {0.0f};
         float z {0.0f};
+
+        constexpr bool operator==(const position&) const noexcept = default;
     };
 
     /// Euler angle rotation (pitch, yaw & roll)
@@ -16,6 +18,8 @@ namespace component {
         float x {0.0f};
         float y {0.0f};
         float z {0.0f};
+
+        constexpr bool operator==(const rotation&) const noexcept = default;
     };
 
     /// Scaling factor per axis
@@ -23,6 +27,8 @@ namespace component {
         float x {0.0f};
         float y {0.0f};
         float z {0.0f};
+
+        constexpr bool operator==(const scale&) const noexcept = default;
     };
 
     struct alignas(32) large_dummy_struct {

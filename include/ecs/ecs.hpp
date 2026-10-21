@@ -7,9 +7,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <concepts>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>
@@ -112,9 +115,9 @@ namespace ecs {
 
     class world {
       public:
-        template<component T>
+        template<component C>
         void register_component() {
-            const auto type_idx = std::type_index(typeid(std::decay_t<T>));
+            const auto type_idx = component_type_index<C>();
             if (m_component_ids.contains(type_idx)) [[unlikely]] {
                 return;
             }
@@ -133,17 +136,17 @@ namespace ecs {
 
                 .constructor =
                     [](void* const dst) {
-                        std::construct_at(static_cast<T*>(dst));
+                        std::construct_at(static_cast<C*>(dst));
                     },
                 .destructor =
                     [](void* const obj) {
-                        std::destroy_at(static_cast<T*>(obj));
+                        std::destroy_at(static_cast<C*>(obj));
                     },
                 .copy_constructor =
                     []() {
-                        if constexpr (std::is_copy_constructible_v<T>) {
+                        if constexpr (std::is_copy_constructible_v<C>) {
                             return [](void* const dst, const void* const src) {
-                                std::construct_at(static_cast<T*>(dst), *static_cast<const T*>(src));
+                                std::construct_at(static_cast<C*>(dst), *static_cast<const C*>(src));
                             };
                         } else {
                             return nullptr; // this shouldn't be called if the type is not copy constructible - but
@@ -152,17 +155,18 @@ namespace ecs {
                     }(),
                 .move_constructor =
                     [](void* const dst, void* const src) {
-                        std::construct_at(static_cast<T*>(dst), std::move(*static_cast<T*>(src)));
+                        std::construct_at(static_cast<C*>(dst), std::move(*static_cast<C*>(src)));
                     },
 
                 // -- Metadata
 
-                .alignment                     = alignof(T),
-                .component_size                = sizeof(T),
-                .type_name                     = typeid(T).name(),
-                .is_trivially_copyable         = std::is_trivially_copyable_v<T>,
-                .is_nothrow_move_constructible = std::is_nothrow_move_constructible_v<T>,
-                .is_trivially_destructible     = std::is_trivially_destructible_v<T>};
+                .alignment                     = alignof(C),
+                .component_size                = sizeof(C),
+                .type_name                     = typeid(C).name(),
+                .is_trivially_copyable         = std::is_trivially_copyable_v<C>,
+                .is_nothrow_move_constructible = std::is_nothrow_move_constructible_v<C>,
+                .is_trivially_destructible     = std::is_trivially_destructible_v<C>,
+            };
 
             m_component_metadata[new_component_id] = new_component_metadata; // FIXME: this might be useless
             m_component_vectors.insert_or_assign(new_component_id, new_component_metadata);
@@ -188,12 +192,17 @@ namespace ecs {
             }
 
             m_entity_archetypes[e]->remove_entity(e);
+            m_entity_archetypes[e] = nullptr;
 
             return m_entities.destroy(e);
         }
 
-        template<component... Components>
-        void add_components(entity_t e, Components&&... component) {
+        bool is_alive(entity_t e) const noexcept {
+            return m_entities.alive(e);
+        }
+
+        template<component... Cs>
+        void add_components(entity_t e, Cs&&... components) {
             if (!is_alive(e)) {
                 return;
             }
@@ -209,7 +218,7 @@ namespace ecs {
             }
 
             const component_mask_t current_mask = it->first;
-            const component_mask_t new_mask     = component_mask<Components...>();
+            const component_mask_t new_mask     = component_mask<Cs...>();
             const component_mask_t target_mask  = current_mask | new_mask;
 
             if (current_mask == target_mask) {
@@ -221,6 +230,8 @@ namespace ecs {
 
             // Copy old components over
 
+            // TODO: need to consider copy vs. move here
+
             const auto entity_idx = current_archetype->entity_index(e);
             for (const auto& [id, src_vec] : current_archetype->component_vectors()) {
                 auto& dst_vec = target_archetype.component_vectors().at(id);
@@ -231,11 +242,10 @@ namespace ecs {
 
             (
                 [&]() {
-                    using ComponentType     = std::decay_t<Components>;
-                    const component_id_t id = component_id<ComponentType>();
+                    const component_id_t id = component_id<Cs>();
 
                     auto& dst_vec = target_archetype.component_vectors().at(id);
-                    dst_vec.copy_into(&component, dst_vec.size() - 1);
+                    dst_vec.copy_into(&components, dst_vec.size() - 1);
                 }(),
                 ...);
 
@@ -245,38 +255,142 @@ namespace ecs {
             return;
         }
 
-        bool is_alive(entity_t e) {
-            return m_entities.alive(e);
+        template<component... Cs>
+        void remove_components(entity_t e) {
+            if (!is_alive(e)) {
+                return;
+            }
+
+            archetype* current_archetype = m_entity_archetypes[e];
+
+            const auto it = std::ranges::find_if(m_archetypes, [&current_archetype](const auto& entry) {
+                return current_archetype == &entry.second;
+            });
+
+            if (it == m_archetypes.cend()) {
+                return;
+            }
+
+            const component_mask_t current_mask = it->first;
+            const component_mask_t remove_mask  = component_mask<Cs...>();
+            const component_mask_t target_mask  = current_mask & (~remove_mask);
+
+            auto& target_archetype = get_archetype(target_mask);
+            target_archetype.add_entity(e);
+
+            // Copy remaining old components over
+
+            // TODO: need to consider copy vs. move here
+
+            const auto entity_idx = current_archetype->entity_index(e);
+            for (const auto& [id, src_vec] : current_archetype->component_vectors()) {
+                if (!target_mask.test(id)) {
+                    continue;
+                }
+
+                auto& dst_vec = target_archetype.component_vectors().at(id);
+                dst_vec.copy_into(src_vec.value_ptr(entity_idx), dst_vec.size() - 1);
+            }
+
+            current_archetype->remove_entity(e);
+            m_entity_archetypes[e] = &target_archetype;
+
+            return;
+        }
+
+        template<component... Cs>
+        bool has_components(entity_t e) {
+            const component_mask_t mask = component_mask<Cs...>();
+            return is_alive(e) && m_archetypes.contains(mask) && m_archetypes.at(mask).contains(e);
         }
 
         // -- Component accessors
 
-        template<component Component>
-        Component& get(entity_t e) {
-            if (!is_alive(e)) {
-                throw nullptr; // FIXME: this sucks
-            }
+        template<component C>
+        C& get_component(entity_t e) {
+            assert(is_alive(e));
 
             archetype* entity_archetype = m_entity_archetypes[e];
-            const auto idx              = entity_archetype->entity_index(e);
-            return entity_archetype->component_vectors().at(component_id<Component>()).template at<Component>(idx);
+
+            assert(entity_archetype != nullptr);
+
+            const auto idx = entity_archetype->entity_index(e);
+
+            return get_by_index<C>(entity_archetype, idx);
+        }
+
+        template<component... Cs>
+        std::tuple<Cs&...> get_components(entity_t e) {
+            assert(is_alive(e));
+
+            archetype* entity_archetype = m_entity_archetypes[e];
+
+            assert(entity_archetype != nullptr);
+
+            const auto idx = entity_archetype->entity_index(e);
+
+            return std::tuple<Cs&...>(get_by_index<Cs>(entity_archetype, idx)...);
+        }
+
+        // -- Systems
+
+        template<typename Target, typename... Ts>
+        static constexpr bool first_pack_type_is_v =
+            sizeof...(Ts) > 0 && std::is_same_v<Target, std::tuple_element_t<0, std::tuple<Ts...>>>;
+
+        template<component... Cs, typename F>
+            requires std::invocable<F, entity_t, Cs&...>
+        void for_each(F&& f) {
+            const component_mask_t mask = component_mask<Cs...>();
+            if (!m_archetypes.contains(mask)) {
+                return;
+            }
+
+            auto&      archetype = m_archetypes.at(mask);
+            const auto zipped_view =
+                std::views::zip(archetype.component_vectors().at(component_id<Cs>()).template as_span<Cs>()...);
+
+            for (const auto& [entity, z] : std::views::zip(archetype.entities(), zipped_view)) {
+                std::apply(f, std::tuple_cat(std::tie(entity), z)); // f(entity, Cs&...)
+            }
+        }
+
+        template<component... Cs, typename F>
+            requires std::invocable<F, Cs&...> && (!std::invocable<F, entity_t, Cs&...>)
+        void for_each(F&& f) {
+            const component_mask_t mask = component_mask<Cs...>();
+            if (!m_archetypes.contains(mask)) {
+                return;
+            }
+
+            const auto zipped_view = std::views::zip(
+                m_archetypes.at(mask).component_vectors().at(component_id<Cs>()).template as_span<Cs>()...);
+
+            for (const auto& z : zipped_view) {
+                std::apply(f, z);
+            }
         }
 
       private:
         // -- Components
 
-        template<component T>
+        template<component C>
+        std::type_index component_type_index() {
+            return std::type_index(typeid(std::decay_t<C>));
+        }
+
+        template<component C>
         component_id_t component_id() {
-            const auto type_idx = std::type_index(typeid(std::decay_t<T>));
+            const auto type_idx = component_type_index<C>();
             assert(m_component_ids.contains(type_idx) &&
                    "component has not been registered before calling component_id()!");
 
             return m_component_ids[type_idx];
         }
 
-        template<component T>
+        template<component C>
         const component_type_info& component_metadata() {
-            return component_metadata(component_id<T>());
+            return component_metadata(component_id<C>());
         }
 
         const component_type_info& component_metadata(component_id_t id) {
@@ -290,31 +404,38 @@ namespace ecs {
             return mask;
         }
 
-      private:
+        // -- Component accessors
+
+        template<component C>
+        C& get_by_index(archetype* entity_archetype, std::size_t idx) {
+            return entity_archetype->component_vectors().at(component_id<C>()).template at<C>(idx);
+        }
+
         // -- Archetypes
 
         archetype& get_archetype(const component_mask_t& mask) {
             if (m_archetypes.contains(mask)) [[likely]] {
                 return m_archetypes.at(mask);
-            } else {
-                // Create new archetype
+            }
 
-                // We actually want a std::array here, really. However, component_vector isn't default constructible.
-                // Alternatively: std::inplace_vector! (in C++26... :/)
-                std::vector<std::pair<component_id_t, component_vector>> id_vector_pairs;
-                id_vector_pairs.reserve(mask.size());
+            // Create new archetype
 
-                for (component_id_t i = 0; i < mask.size(); ++i) {
-                    if (!mask.test(i))
-                        continue;
+            // We actually want a std::array here, really. However, component_vector isn't default constructible.
+            // Alternatively: std::inplace_vector! (in C++26... :/)
+            std::vector<std::pair<component_id_t, component_vector>> id_vector_pairs;
+            id_vector_pairs.reserve(mask.size());
 
-                    id_vector_pairs.emplace_back(i, m_component_vectors.at(i));
+            for (component_id_t i = 0; i < mask.size(); ++i) {
+                if (!mask.test(i)) {
+                    continue;
                 }
 
-                m_archetypes.insert(std::make_pair(mask, archetype(std::span {id_vector_pairs})));
-
-                return m_archetypes.at(mask);
+                id_vector_pairs.emplace_back(i, m_component_vectors.at(i));
             }
+
+            m_archetypes.insert(std::make_pair(mask, archetype(std::span {id_vector_pairs})));
+
+            return m_archetypes.at(mask);
         }
 
       private:
