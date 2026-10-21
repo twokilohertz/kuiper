@@ -334,40 +334,26 @@ namespace ecs {
 
         // -- Systems
 
-        template<typename Target, typename... Ts>
-        static constexpr bool first_pack_type_is_v =
-            sizeof...(Ts) > 0 && std::is_same_v<Target, std::tuple_element_t<0, std::tuple<Ts...>>>;
-
         template<component... Cs, typename F>
-            requires std::invocable<F, entity_t, Cs&...>
+            requires(std::invocable<F, Cs&...> || std::invocable<F, entity_t, Cs&...>)
         void for_each(F&& f) {
             const component_mask_t mask = component_mask<Cs...>();
             if (!m_archetypes.contains(mask)) {
                 return;
             }
 
-            auto&      archetype = m_archetypes.at(mask);
-            const auto zipped_view =
+            auto& archetype = m_archetypes.at(mask);
+            auto  zipped_view =
                 std::views::zip(archetype.component_vectors().at(component_id<Cs>()).template as_span<Cs>()...);
 
+            constexpr bool wants_entity = std::invocable<F, entity_t, Cs&...>;
+
             for (const auto& [entity, z] : std::views::zip(archetype.entities(), zipped_view)) {
-                std::apply(f, std::tuple_cat(std::tie(entity), z)); // f(entity, Cs&...)
-            }
-        }
-
-        template<component... Cs, typename F>
-            requires std::invocable<F, Cs&...> && (!std::invocable<F, entity_t, Cs&...>)
-        void for_each(F&& f) {
-            const component_mask_t mask = component_mask<Cs...>();
-            if (!m_archetypes.contains(mask)) {
-                return;
-            }
-
-            const auto zipped_view = std::views::zip(
-                m_archetypes.at(mask).component_vectors().at(component_id<Cs>()).template as_span<Cs>()...);
-
-            for (const auto& z : zipped_view) {
-                std::apply(f, z);
+                if constexpr (wants_entity) {
+                    std::apply(f, std::tuple_cat(std::tie(entity), z)); // f(entity, Cs&...)
+                } else {
+                    std::apply(f, z); // f(Cs&...)
+                }
             }
         }
 
